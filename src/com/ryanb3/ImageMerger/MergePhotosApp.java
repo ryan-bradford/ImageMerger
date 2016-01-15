@@ -1,130 +1,123 @@
 package com.ryanb3.ImageMerger;
 
-import java.awt.Color;
-import java.awt.Image;
+import java.awt.FileDialog;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+
 import marvin.image.MarvinImage;
 import marvin.io.MarvinImageIO;
-import marvin.plugin.MarvinImagePlugin;
-import marvin.util.MarvinPluginLoader;
 
 public class MergePhotosApp {
+	
+	JFrame dialogDisplay;
+	Merger merger;
+	FileDialog fd;
 
-	static List<MarvinImage> images = new ArrayList<MarvinImage>();
-	static MarvinImage output;
-	static double threshhold = 50;
-	static double scalePower = 3;
-	
-	public static void loadImages() {
-		for (int i = 1; i <= 112; i++) {
-			if(i < 10) {
-				images.add(MarvinImageIO.loadImage("Pictures/VKNX0338 00" + i + ".jpg"));
-			} else if(i < 100) {
-				images.add(MarvinImageIO.loadImage("Pictures/VKNX0338 0" + i + ".jpg"));
-			} else {
-				images.add(MarvinImageIO.loadImage("Pictures/VKNX0338 " + i + ".jpg"));
-			}
+	public List<MarvinImage> loadImages(File[] files) {
+		List<MarvinImage> images = new ArrayList<MarvinImage>();
+		for (int i = 0; i < files.length; i++) {
+			images.add(MarvinImageIO.loadImage(files[i].toString()));
 		}
-		output = images.get(0).clone();
+		return images;
 	}
-	
-	public static void combineImagesThroughMarvin() {
-		// 2. Load plug-in and process the image
-		MarvinImagePlugin merge = MarvinPluginLoader.loadImagePlugin("org.marvinproject.image.combine.mergePhotos");
-		merge.setAttribute("threshold", 34);
-		merge.process(images, output);
-	}
-	
-	public static void combineImagesMyWayWithThreashold() {
-		int[][] redTotal = new int[output.getWidth()][output.getHeight()];
-		int[][] greenTotal = new int[output.getWidth()][output.getHeight()];
-		int[][] blueTotal = new int[output.getWidth()][output.getHeight()];
-		double[][] redDivideTotal = new double[output.getWidth()][output.getHeight()];
-		double[][] greenDivideTotal = new double[output.getWidth()][output.getHeight()];
-		double[][] blueDivideTotal = new double[output.getWidth()][output.getHeight()];
-		for(int i = 0; i < images.size(); i++) {
-			for(int x = 0; x < images.get(i).getWidth(); x++) {
-				for(int y = 0; y < images.get(i).getHeight(); y++) {
-					if(images.get(i).getIntComponent0(x, y) > threshhold) {
-						redDivideTotal[x][y]++;
-						redTotal[x][y] += images.get(i).getIntComponent0(x, y);
-					} else {
-						redDivideTotal[x][y] += threshhold / 255;
-					}
-					if(images.get(i).getIntComponent1(x, y) > threshhold) {
-						greenDivideTotal[x][y]++;
-						greenTotal[x][y] += images.get(i).getIntComponent1(x, y);
-					} else {
-						greenDivideTotal[x][y] += threshhold / 255;
-					}
-					if(images.get(i).getIntComponent2(x, y) > threshhold) {
-						blueDivideTotal[x][y]++;
-						blueTotal[x][y] += images.get(i).getIntComponent2(x, y);
-					} else {
-						blueDivideTotal[x][y] += threshhold / 255;
-					}
-				}
-			}
-		}		
-		
-		for(int x = 0; x < output.getWidth(); x++) {
-			for(int y = 0; y < output.getHeight(); y++) {
-				redTotal[x][y] /= Math.ceil(redDivideTotal[x][y]);
-				greenTotal[x][y] /= Math.ceil(greenDivideTotal[x][y]);
-				blueTotal[x][y] /= Math.ceil(blueDivideTotal[x][y]);;
 
-			}
-		}
-		for(int x = 0; x < output.getWidth(); x++) {
-			for(int y = 0; y < output.getHeight(); y++) {
-				output.setIntColor(x, y, new Color(redTotal[x][y], greenTotal[x][y], blueTotal[x][y]).hashCode());
-			}
+	public void handleMarvinOption() {
+		int option1 = JOptionPane.showConfirmDialog(null, "Would you like to combine but seeking color difference?");
+		if (option1 == 0) {
+			MarvinImage toWrite = merger.combineImagesThroughMarvin(merger.getImages());
+			merger.writeImage(toWrite);
+			finish(true, false);
+		} else if (option1 == 1) {
+			handleScaleOption(false);
+		} else {
+			startMerger(false);
 		}
 	}
-	
-	public static void combineImagesMyWayWithScaling() {
-		int[][] redTotal = new int[output.getWidth()][output.getHeight()];
-		int[][] greenTotal = new int[output.getWidth()][output.getHeight()];
-		int[][] blueTotal = new int[output.getWidth()][output.getHeight()];
-		for(int i = 0; i < images.size(); i++) {
-			for(int x = 0; x < images.get(i).getWidth(); x++) {
-				for(int y = 0; y < images.get(i).getHeight(); y++) {
-					redTotal[x][y] += Math.pow(images.get(i).getIntComponent0(x, y), scalePower);					
-					greenTotal[x][y] += Math.pow(images.get(i).getIntComponent1(x, y), scalePower);					
-					blueTotal[x][y] += Math.pow(images.get(i).getIntComponent2(x, y), scalePower);
-					
-				}
-			}
-		}		
-		
-		int divisor = images.size();
-		
-		for(int x = 0; x < output.getWidth(); x++) {
-			for(int y = 0; y < output.getHeight(); y++) {
-				redTotal[x][y] /= Math.ceil(divisor);
-				greenTotal[x][y] /= Math.ceil(divisor);
-				blueTotal[x][y] /= Math.ceil(divisor);;
 
-			}
+	public void handleScaleOption(boolean didMarvin) {
+		int option2 = JOptionPane.showConfirmDialog(null, "Would you like to scale the values?");
+		if (option2 == 0) {
+			merger.scaleValues();
+			handleThresholdOption(didMarvin, true);
+		} else if (option2 == 1) {
+			handleThresholdOption(didMarvin, false);
+		} else {
+			startMerger(false);
 		}
-		for(int x = 0; x < output.getWidth(); x++) {
-			for(int y = 0; y < output.getHeight(); y++) {
-				output.setIntColor(x, y, new Color((int)Math.pow(redTotal[x][y], 1.0/scalePower), (int)Math.pow(greenTotal[x][y], 1.0/scalePower), (int)Math.pow(blueTotal[x][y], 1.0/scalePower)).hashCode());
-			}
+	}
+
+	public void handleThresholdOption(boolean didMarvin, boolean didScale) {
+		int option3 = JOptionPane.showConfirmDialog(null, "Would you like to apply a threshold?");
+		if (option3 == 0) {
+			merger.setThreshold();
+			handleCeilOption(didMarvin, didScale);
+		} else if (option3 == 1) {
+			handleCeilOption(didMarvin, didScale);
+		} else {
+			startMerger(false);
 		}
 	}
 	
-	public static void writeImage() {
-		MarvinImageIO.saveImage(output, "merge_output2.jpg");
+	public void handleCeilOption(boolean didMarvin, boolean didScale) {
+		int option4 = JOptionPane.showConfirmDialog(null, "Would you like to apply a ceiling?");
+		if (option4 == 0) {
+			merger.ceilValues();
+			finish(didMarvin, didScale);
+		} else if(option4 == 1) {
+			finish(didMarvin, didScale);
+		} else {
+			startMerger(false);
+		}
+	}
+
+	public void finish(boolean didMarvin, boolean didScale) {
+		if (!didMarvin) {
+			MarvinImage toWrite = merger.combineImages(didScale, merger.getRed(), merger.getGreen(), merger.getBlue(), merger.getImages().get(0).clone());
+			merger.writeImage(toWrite);
+		}
+		startMerger(false);
+	}
+
+	public void startMerger(boolean fromCrash) {
+		if (fromCrash) {
+			JOptionPane.showMessageDialog(null, "Sorry, that was not a proper file");
+		}
+		int option0 = JOptionPane.showConfirmDialog(null, "Would you like to combine some images?");
+		if (option0 == 0) {
+			try {
+				fd = new FileDialog(dialogDisplay, "Choose a file", FileDialog.LOAD);
+				fd.setDirectory("C:\\");
+				fd.setMultipleMode(true);
+				fd.setVisible(true);
+				File[] files = fd.getFiles();
+				List<MarvinImage> images = loadImages(files);
+				merger = new Merger(images, images.get(0).clone());
+				merger.createArrays();
+				handleMarvinOption();
+			} catch (IndexOutOfBoundsException ex) {
+				startMerger(true);
+			}
+		} else {
+			System.exit(0);
+		}
+	}
+
+	public void initMerger() {
+		dialogDisplay = new JFrame();
+		dialogDisplay.setVisible(true);
+		dialogDisplay.pack();
+		startMerger(false);
+	}
+	
+	public MergePhotosApp() {
+		initMerger();
 	}
 
 	public static void main(String[] args) {
-		loadImages();
-		//combineImagesThroughMarvin();
-		combineImagesMyWayWithScaling();
-		//combineImagesMyWayWithThreashold();
-		writeImage();
+		new MergePhotosApp();
 	}
 }
